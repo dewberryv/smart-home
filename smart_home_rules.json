@@ -1,0 +1,19 @@
+[
+  {
+    "device": "кондиционер",
+    "action": "включить",
+    "temperature": ">24",
+    "time_of_day": "день"
+  },
+  {
+    "device": "кондиционер",
+    "action": "выключить",
+    "temperature": ">24"
+  },
+  {
+    "device": "сигнализация",
+    "action": "включить",
+    "timer": 30,
+    "motion": true
+  }
+]
