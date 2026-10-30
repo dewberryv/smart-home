@@ -6,6 +6,8 @@ from datetime import datetime, timedelta
 import threading
 import time
 
+from rules_engine import find_conflicts, rule_matches, rules_conflict
+
 
 class SmartHomeController:
     def __init__(self, root):
@@ -13,31 +15,25 @@ class SmartHomeController:
         self.root.title("🏠 Контроллер умного дома")
         self.root.geometry("1200x750")
 
-        # Данные
+        # данные
         self.rules = []
         self.sensors = {}
         self.log = []
         self.simulation_active = False
-        self.active_timers = []  # Список активных таймеров
-        self.active_actions = {}  # Словарь активных действий: device -> действие
+        self.active_timers = []  # список активных таймеров
+        self.active_actions = {}  # словарь активных действий: device -> действие
 
-        # Блокировка для потокобезопасности
-        self.timer_lock = threading.Lock()
+        self.timer_lock = threading.Lock()  # блокировка для потокобезопасности
 
-        # Инициализация датчиков
-        self.initialize_sensors()
+        self.initialize_sensors()  # инициализация датчиков
 
-        # Создание интерфейса
-        self.create_widgets()
+        self.create_widgets()  # создание интерфейса
 
-        # Загрузка правил
-        self.load_rules()
+        self.load_rules()  # загрузка правил
 
-        # Запуск симуляции
-        self.start_simulation()
+        self.start_simulation()  # запуск симуляции
 
-        # Запуск проверки таймеров
-        self.start_timer_checker()
+        self.start_timer_checker()  # запуск проверки таймеров
 
     def initialize_sensors(self):
         """Инициализация начальных значений датчиков"""
@@ -63,63 +59,63 @@ class SmartHomeController:
 
     def create_widgets(self):
         """Создание интерфейса"""
-        # Notebook для вкладок
+        # notebook для вкладок
         self.notebook = ttk.Notebook(self.root)
         self.notebook.pack(fill='both', expand=True, padx=10, pady=10)
 
-        # Вкладка правил
+        # вкладка правил
         self.rules_frame = ttk.Frame(self.notebook)
         self.notebook.add(self.rules_frame, text="📋 Правила")
         self.create_rules_tab()
 
-        # Вкладка датчиков
+        # вкладка датчиков
         self.sensors_frame = ttk.Frame(self.notebook)
         self.notebook.add(self.sensors_frame, text="🌡️ Датчики")
         self.create_sensors_tab()
 
-        # Вкладка лога
+        # вкладка лога
         self.log_frame = ttk.Frame(self.notebook)
         self.notebook.add(self.log_frame, text="📝 Лог действий")
         self.create_log_tab()
 
-        # Вкладка таймеров
+        # вкладка таймеров
         self.timers_frame = ttk.Frame(self.notebook)
         self.notebook.add(self.timers_frame, text="⏱️ Таймеры")
         self.create_timers_tab()
 
     def create_rules_tab(self):
         """Создание вкладки с правилами"""
-        # Главный горизонтальный контейнер
+        # главный горизонтальный контейнер
         main_paned = ttk.PanedWindow(self.rules_frame, orient='horizontal')
         main_paned.pack(fill='both', expand=True)
 
-        # Левая панель - добавление правил
+        # левая панель - добавление правил
         left_frame = ttk.Frame(main_paned)
         main_paned.add(left_frame, weight=1)
 
-        # Правая панель - активные действия
+        # правая панель - активные действия
         right_frame = ttk.Frame(main_paned)
         main_paned.add(right_frame, weight=1)
 
-        # --- Левая часть: добавление правил ---
+        # левая часть: добавление правил
         add_frame = ttk.LabelFrame(left_frame, text="Добавить новое правило", padding=10)
         add_frame.pack(fill='x', padx=5, pady=5)
 
-        # Устройство
+        # устройство
         ttk.Label(add_frame, text="Устройство:").grid(row=0, column=0, sticky='w', pady=5)
         self.device_var = tk.StringVar(value="кондиционер")
         device_combo = ttk.Combobox(add_frame, textvariable=self.device_var,
                                     values=["кондиционер", "обогреватель", "освещение", "вентилятор", "сигнализация"])
         device_combo.grid(row=0, column=1, sticky='ew', pady=5, padx=5)
 
-        # Действие
+        # действие
         ttk.Label(add_frame, text="Действие:").grid(row=1, column=0, sticky='w', pady=5)
         self.action_var = tk.StringVar(value="включить")
         action_combo = ttk.Combobox(add_frame, textvariable=self.action_var,
                                     values=["включить", "выключить"])
         action_combo.grid(row=1, column=1, sticky='ew', pady=5, padx=5)
 
-        # Таймер
+        # таймер
         ttk.Label(add_frame, text="Таймер (минут):").grid(row=2, column=0, sticky='w', pady=5)
         timer_frame = ttk.Frame(add_frame)
         timer_frame.grid(row=2, column=1, sticky='ew', pady=5)
@@ -131,13 +127,13 @@ class SmartHomeController:
         self.timer_entry.pack(side='left', padx=5)
         ttk.Label(timer_frame, text="мин").pack(side='left')
 
-        # Условия с чекбоксами
+        # условия с чекбоксами
         ttk.Label(add_frame, text="Условия (отметьте нужные):").grid(row=3, column=0, columnspan=2, sticky='w', pady=10)
 
         conditions_frame = ttk.Frame(add_frame)
         conditions_frame.grid(row=4, column=0, columnspan=2, sticky='ew', pady=5)
 
-        # Температура
+        # температура
         self.use_temp = tk.BooleanVar(value=False)
         temp_check = ttk.Checkbutton(conditions_frame, text="Температура", variable=self.use_temp,
                                      command=lambda: self.toggle_condition('temp'))
@@ -153,7 +149,7 @@ class SmartHomeController:
 
         self.toggle_condition_widgets('temp', False)
 
-        # Влажность
+        # влажность
         self.use_hum = tk.BooleanVar(value=False)
         hum_check = ttk.Checkbutton(conditions_frame, text="Влажность", variable=self.use_hum,
                                     command=lambda: self.toggle_condition('hum'))
@@ -169,7 +165,7 @@ class SmartHomeController:
 
         self.toggle_condition_widgets('hum', False)
 
-        # Освещённость
+        # освещённость
         self.use_light = tk.BooleanVar(value=False)
         light_check = ttk.Checkbutton(conditions_frame, text="Освещённость", variable=self.use_light,
                                       command=lambda: self.toggle_condition('light'))
@@ -184,7 +180,7 @@ class SmartHomeController:
 
         self.toggle_condition_widgets('light', False)
 
-        # Время суток
+        # время суток
         self.use_time = tk.BooleanVar(value=False)
         time_check = ttk.Checkbutton(conditions_frame, text="Время суток", variable=self.use_time,
                                      command=lambda: self.toggle_condition('time'))
@@ -195,7 +191,7 @@ class SmartHomeController:
                                        values=["утро", "день", "вечер", "ночь"], state='disabled')
         self.time_combo.grid(row=3, column=1, columnspan=3, sticky='ew', pady=2)
 
-        # Движение
+        # движение
         self.use_motion = tk.BooleanVar(value=False)
         motion_check = ttk.Checkbutton(conditions_frame, text="Движение", variable=self.use_motion,
                                        command=lambda: self.toggle_condition('motion'))
@@ -206,15 +202,15 @@ class SmartHomeController:
                                          values=["есть", "нет"], state='disabled')
         self.motion_combo.grid(row=4, column=1, columnspan=3, sticky='ew', pady=2)
 
-        # Кнопка добавления
+        # кнопка добавления
         ttk.Button(add_frame, text="✅ Добавить правило", command=self.add_rule).grid(row=5, column=0, columnspan=2,
                                                                                      pady=10)
 
-        # Список правил
+        # список правил
         list_frame = ttk.LabelFrame(left_frame, text="Текущие правила", padding=10)
         list_frame.pack(fill='both', expand=True, padx=5, pady=5)
 
-        # Treeview для правил
+        # treeview для правил
         columns = ("ID", "Устройство", "Условия", "Действие", "Таймер")
         self.rules_tree = ttk.Treeview(list_frame, columns=columns, show='headings', height=8)
 
@@ -228,7 +224,7 @@ class SmartHomeController:
         scrollbar.pack(side='right', fill='y')
         self.rules_tree.configure(yscrollcommand=scrollbar.set)
 
-        # Кнопки управления правилами
+        # кнопки управления правилами
         btn_frame = ttk.Frame(left_frame)
         btn_frame.pack(fill='x', padx=5, pady=5)
 
@@ -236,22 +232,22 @@ class SmartHomeController:
         ttk.Button(btn_frame, text="🔄 Обновить", command=self.update_rules_list).pack(side='left', padx=2)
         ttk.Button(btn_frame, text="🔍 Конфликты", command=self.check_conflicts).pack(side='left', padx=2)
 
-        # --- Правая часть: активные действия ---
+        # правая часть: активные действия
         active_frame = ttk.LabelFrame(right_frame, text="📊 Активные устройства", padding=10)
         active_frame.pack(fill='both', expand=True, padx=5, pady=5)
 
-        # Заголовок с текущим временем
+        # заголовок с текущим временем
         self.active_time_label = ttk.Label(active_frame, text="", font=('Arial', 10))
         self.active_time_label.pack(pady=5)
 
-        # Разделительная линия
+        # разделительная линия
         ttk.Separator(active_frame, orient='horizontal').pack(fill='x', pady=5)
 
-        # Фрейм для статуса устройств
+        # фрейм для статуса устройств
         self.devices_status_frame = ttk.Frame(active_frame)
         self.devices_status_frame.pack(fill='both', expand=True, pady=10)
 
-        # Создаём индикаторы для всех устройств
+        # создаём индикаторы для всех устройств
         self.device_indicators = {}
         devices = ["кондиционер", "обогреватель", "освещение", "вентилятор", "сигнализация"]
         device_icons = {
@@ -277,11 +273,11 @@ class SmartHomeController:
 
             self.device_indicators[device] = status_label
 
-        # Кнопка обновления статуса
+        # кнопка обновления статуса
         ttk.Button(active_frame, text="🔄 Обновить статус",
                    command=self.update_active_actions_display).pack(pady=10)
 
-        # Обновляем списки
+        # обновляем списки
         self.update_rules_list()
         self.update_active_actions_display()
 
@@ -320,11 +316,11 @@ class SmartHomeController:
 
     def create_sensors_tab(self):
         """Создание вкладки с датчиками"""
-        # Текущие показания
+        # текущие показания
         values_frame = ttk.LabelFrame(self.sensors_frame, text="Текущие показания", padding=20)
         values_frame.pack(fill='x', padx=10, pady=10)
 
-        # Датчики
+        # датчики
         self.temp_label = ttk.Label(values_frame, text="🌡️ Температура: -- °C", font=('Arial', 14))
         self.temp_label.pack(anchor='w', pady=5)
 
@@ -340,7 +336,7 @@ class SmartHomeController:
         self.time_label = ttk.Label(values_frame, text="🕐 Время суток: --", font=('Arial', 14))
         self.time_label.pack(anchor='w', pady=5)
 
-        # Управление симуляцией
+        # управление симуляцией
         control_frame = ttk.LabelFrame(self.sensors_frame, text="Управление симуляцией", padding=10)
         control_frame.pack(fill='x', padx=10, pady=10)
 
@@ -354,11 +350,11 @@ class SmartHomeController:
         ttk.Button(control_frame, text="▶️ Проверить правила",
                    command=self.check_rules).pack(side='left', padx=5)
 
-        # Ручное управление ВСЕМИ датчиками
+        # ручное управление ВСЕМИ датчиками
         manual_frame = ttk.LabelFrame(self.sensors_frame, text="Ручная установка значений", padding=10)
         manual_frame.pack(fill='x', padx=10, pady=10)
 
-        # Температура
+        # температура
         ttk.Label(manual_frame, text="Температура (°C):").grid(row=0, column=0, pady=5, padx=5, sticky='w')
         self.manual_temp = tk.DoubleVar(value=24.0)
         temp_scale = ttk.Scale(manual_frame, from_=15, to=35, variable=self.manual_temp,
@@ -367,7 +363,7 @@ class SmartHomeController:
         self.manual_temp_label = ttk.Label(manual_frame, text="24.0", width=5)
         self.manual_temp_label.grid(row=0, column=2, padx=5)
 
-        # Влажность
+        # влажность
         ttk.Label(manual_frame, text="Влажность (%):").grid(row=1, column=0, pady=5, padx=5, sticky='w')
         self.manual_hum = tk.DoubleVar(value=50.0)
         hum_scale = ttk.Scale(manual_frame, from_=20, to=90, variable=self.manual_hum,
@@ -376,7 +372,7 @@ class SmartHomeController:
         self.manual_hum_label = ttk.Label(manual_frame, text="50.0", width=5)
         self.manual_hum_label.grid(row=1, column=2, padx=5)
 
-        # Освещённость
+        # освещённость
         ttk.Label(manual_frame, text="Освещённость:").grid(row=2, column=0, pady=5, padx=5, sticky='w')
         self.manual_light = tk.IntVar(value=50)
         light_scale = ttk.Scale(manual_frame, from_=0, to=100, variable=self.manual_light,
@@ -385,13 +381,13 @@ class SmartHomeController:
         self.manual_light_label = ttk.Label(manual_frame, text="50", width=5)
         self.manual_light_label.grid(row=2, column=2, padx=5)
 
-        # Движение
+        # движение
         ttk.Label(manual_frame, text="Движение:").grid(row=3, column=0, pady=5, padx=5, sticky='w')
         self.manual_motion = tk.BooleanVar(value=False)
         ttk.Checkbutton(manual_frame, text="Есть движение", variable=self.manual_motion).grid(row=3, column=1,
                                                                                               sticky='w', padx=5)
 
-        # Время суток
+        # время суток
         ttk.Label(manual_frame, text="Время суток:").grid(row=4, column=0, pady=5, padx=5, sticky='w')
         self.manual_time = tk.StringVar(value=self.time_of_day)
         time_combo = ttk.Combobox(manual_frame, textvariable=self.manual_time,
@@ -423,7 +419,7 @@ class SmartHomeController:
 
     def create_log_tab(self):
         """Создание вкладки с логом"""
-        # Текстовое поле для лога
+        # текстовое поле для лога
         self.log_text = tk.Text(self.log_frame, wrap='word', font=('Courier', 10))
         self.log_text.pack(fill='both', expand=True, padx=10, pady=10)
 
@@ -436,20 +432,20 @@ class SmartHomeController:
 
     def create_timers_tab(self):
         """Создание вкладки с активными таймерами"""
-        # Заголовок
+        # заголовок
         ttk.Label(self.timers_frame, text="Активные таймеры устройств",
                   font=('Arial', 14)).pack(pady=10)
 
-        # Пояснение
+        # пояснение
         ttk.Label(self.timers_frame, text="Таймеры продолжают работать независимо от изменения условий!\n"
                                           "После активации таймер не останавливается до истечения времени.",
                   font=('Arial', 10), foreground='gray').pack(pady=5)
 
-        # Список таймеров
+        # список таймеров
         self.timers_text = tk.Text(self.timers_frame, wrap='word', font=('Courier', 11), height=15)
         self.timers_text.pack(fill='both', expand=True, padx=10, pady=10)
 
-        # Кнопка обновления
+        # кнопка обновления
         ttk.Button(self.timers_frame, text="🔄 Обновить список таймеров",
                    command=self.update_timers_display).pack(pady=5)
 
@@ -457,11 +453,11 @@ class SmartHomeController:
 
     def update_active_actions_display(self):
         """Обновление отображения активных действий"""
-        # Обновляем время
+        # обновляем время
         current_time = datetime.now().strftime("%H:%M:%S")
         self.active_time_label.config(text=f"🕐 Текущее время: {current_time}")
 
-        # Обновляем статус устройств
+        # обновляем статус устройств
         for device, indicator in self.device_indicators.items():
             if device in self.active_actions:
                 action = self.active_actions[device]
@@ -472,41 +468,17 @@ class SmartHomeController:
             else:
                 indicator.config(text="⚪ Не активно", foreground='gray')
 
-        # Планируем следующее обновление
+        # планируем следующее обновление
         self.root.after(1000, self.update_active_actions_display)
 
     def check_conflicts(self):
         """Проверка конфликтующих правил с возможностью выбора"""
-        conflicts = []
-
-        for i in range(len(self.rules)):
-            for j in range(i + 1, len(self.rules)):
-                rule1 = self.rules[i]
-                rule2 = self.rules[j]
-
-                # Проверяем, относятся ли правила к одному устройству
-                if rule1['device'] == rule2['device']:
-                    # Проверяем, есть ли общие условия
-                    common_conditions = []
-                    for key in ['temperature', 'humidity', 'light', 'time_of_day', 'motion']:
-                        if key in rule1 and key in rule2 and rule1[key] == rule2[key]:
-                            common_conditions.append(key)
-
-                    # Если есть хоть одно общее условие
-                    if common_conditions or (not self.has_conditions(rule1) and not self.has_conditions(rule2)):
-                        conflicts.append((i, j, common_conditions))
+        conflicts = find_conflicts(self.rules)
 
         if conflicts:
             self.show_conflicts_dialog(conflicts)
         else:
             messagebox.showinfo("Проверка", "Конфликтующие правила не найдены")
-
-    def has_conditions(self, rule):
-        """Проверка наличия условий в правиле"""
-        for key in ['temperature', 'humidity', 'light', 'time_of_day', 'motion']:
-            if key in rule:
-                return True
-        return False
 
     def show_conflicts_dialog(self, conflicts):
         """Диалог для разрешения конфликтов"""
@@ -517,7 +489,7 @@ class SmartHomeController:
         ttk.Label(dialog, text="Выберите правила для разрешения конфликтов:",
                   font=('Arial', 12)).pack(pady=10)
 
-        # Фрейм с прокруткой
+        # фрейм с прокруткой
         main_frame = ttk.Frame(dialog)
         main_frame.pack(fill='both', expand=True, padx=10, pady=5)
 
@@ -545,13 +517,13 @@ class SmartHomeController:
                       text=f"Общие условия: {', '.join(common_conditions) if common_conditions else 'всегда'}",
                       font=('Arial', 10, 'bold')).pack(anchor='w')
 
-            # Правило 1
+            # правило 1
             var1 = tk.BooleanVar(value=True)
             cb1 = ttk.Checkbutton(conflict_frame, text=f"Правило {i + 1}: {self.rule_to_string(self.rules[i])}",
                                   variable=var1)
             cb1.pack(anchor='w', pady=2)
 
-            # Правило 2
+            # правило 2
             var2 = tk.BooleanVar(value=False)
             cb2 = ttk.Checkbutton(conflict_frame, text=f"Правило {j + 1}: {self.rule_to_string(self.rules[j])}",
                                   variable=var2)
@@ -574,7 +546,7 @@ class SmartHomeController:
                     rules_to_remove.add(j)
 
             if rules_to_remove:
-                # Удаляем с конца, чтобы не сбить индексы
+                # удаляем с конца, чтобы не сбить индексы
                 for rule_idx in sorted(rules_to_remove, reverse=True):
                     removed_rule = self.rules.pop(rule_idx)
                     self.add_log_entry(f"Удалено конфликтующее правило: {self.rule_to_string(removed_rule)}")
@@ -592,13 +564,13 @@ class SmartHomeController:
 
     def add_rule(self):
         """Добавление нового правила"""
-        # Формируем правило
+        # формируем правило
         new_rule = {
             'device': self.device_var.get(),
             'action': self.action_var.get()
         }
 
-        # Добавляем таймер, если включен
+        # добавляем таймер, если включен
         if self.timer_enabled.get():
             try:
                 timer_minutes = int(self.timer_value.get())
@@ -608,7 +580,7 @@ class SmartHomeController:
                 messagebox.showerror("Ошибка", "Введите корректное значение таймера")
                 return
 
-        # Добавляем только отмеченные условия
+        # добавляем только отмеченные условия
         if self.use_temp.get() and self.temp_value.get().strip():
             new_rule['temperature'] = f"{self.temp_operator.get()}{self.temp_value.get()}"
 
@@ -624,36 +596,34 @@ class SmartHomeController:
         if self.use_motion.get():
             new_rule['motion'] = self.motion_var.get() == "есть"
 
-        # Проверяем на полные дубликаты
+        # проверяем на полные дубликаты
         for existing_rule in self.rules:
             if self.rules_equal(new_rule, existing_rule):
                 messagebox.showinfo("Дубликат", "Такое правило уже существует!")
                 return
 
-        # Проверяем на противоположные действия
-        for existing_rule in self.rules:
-            if (existing_rule['device'] == new_rule['device'] and
-                    existing_rule['action'] != new_rule['action'] and
-                    self.conditions_equal(new_rule, existing_rule)):
+        # проверяем на конфликты с уже существующими правилами
+        conflicting = [r for r in self.rules if rules_conflict(new_rule, r)]
+        if conflicting:
+            rules_text = "\n".join(self.rule_to_string(r) for r in conflicting)
+            response = messagebox.askyesno(
+                "Конфликт правил",
+                f"Новое правило может сработать одновременно с правилами, "
+                f"дающими противоположное действие:\n{rules_text}\n\n"
+                "Заменить их новым правилом?")
+            if not response:
+                return
+            for r in conflicting:
+                self.rules.remove(r)
+                self.add_log_entry(f"Заменено правило: {self.rule_to_string(r)}")
 
-                response = messagebox.askyesno("Противоположное действие",
-                                               f"Существует правило с противоположным действием:\n"
-                                               f"{self.rule_to_string(existing_rule)}\n\n"
-                                               "Хотите заменить его новым правилом?")
-                if response:
-                    self.rules.remove(existing_rule)
-                    self.add_log_entry(f"Заменено правило: {self.rule_to_string(existing_rule)}")
-                else:
-                    return
-                break
-
-        # Добавляем правило
+        # добавляем правило
         self.rules.append(new_rule)
         self.save_rules()
         self.update_rules_list()
         self.add_log_entry(f"Добавлено правило: {self.rule_to_string(new_rule)}")
 
-        # Очищаем поля
+        # очищаем поля
         self.use_temp.set(False)
         self.use_hum.set(False)
         self.use_light.set(False)
@@ -676,13 +646,6 @@ class SmartHomeController:
             if rule1.get(key) != rule2.get(key):
                 return False
 
-        return True
-
-    def conditions_equal(self, rule1, rule2):
-        """Проверка на совпадение условий"""
-        for key in ['temperature', 'humidity', 'light', 'time_of_day', 'motion']:
-            if rule1.get(key) != rule2.get(key):
-                return False
         return True
 
     def rule_to_string(self, rule):
@@ -720,66 +683,23 @@ class SmartHomeController:
             self.update_rules_list()
             self.add_log_entry(f"Удалено правило: {self.rule_to_string(removed_rule)}")
 
-    def check_condition(self, condition_str, value):
-        """Проверка условия"""
-        if not condition_str:
-            return True
-
-        condition_str = str(condition_str)
-        if condition_str.startswith('>='):
-            return value >= float(condition_str[2:])
-        elif condition_str.startswith('<='):
-            return value <= float(condition_str[2:])
-        elif condition_str.startswith('>'):
-            return value > float(condition_str[1:])
-        elif condition_str.startswith('<'):
-            return value < float(condition_str[1:])
-        elif condition_str.startswith('='):
-            return value == float(condition_str[1:])
-        return True
-
     def check_rules(self):
         """Проверка всех правил"""
         actions = []
 
         for rule in self.rules:
-            conditions_met = True
-
-            # Проверяем температуру
-            if 'temperature' in rule and rule['temperature']:
-                if not self.check_condition(rule['temperature'], self.sensors['temperature']):
-                    conditions_met = False
-
-            # Проверяем влажность
-            if 'humidity' in rule and rule['humidity']:
-                if not self.check_condition(rule['humidity'], self.sensors['humidity']):
-                    conditions_met = False
-
-            # Проверяем освещённость
-            if 'light' in rule and rule['light']:
-                if not self.check_condition(rule['light'], self.sensors['light']):
-                    conditions_met = False
-
-            # Проверяем время суток
-            if 'time_of_day' in rule and rule['time_of_day']:
-                if rule['time_of_day'] != self.time_of_day:
-                    conditions_met = False
-
-            # Проверяем движение
-            if 'motion' in rule:
-                if not self.sensors['motion']:
-                    conditions_met = False
+            conditions_met = rule_matches(rule, self.sensors, self.time_of_day)
 
             if conditions_met:
                 action = f"{rule['action']} {rule['device']}"
                 actions.append(action)
 
-                # Обновляем активные действия
+                # обновляем активные действия
                 self.active_actions[rule['device']] = rule['action']
 
                 self.add_log_entry(f"🟢 Выполнено: {action}")
 
-                # Если есть таймер, запускаем его
+                # если есть таймер, запускаем его
                 if 'timer' in rule and rule['timer'] > 0:
                     self.start_timer(rule)
 
@@ -788,10 +708,10 @@ class SmartHomeController:
     def start_timer(self, rule):
         """Запуск таймера для правила"""
         with self.timer_lock:
-            # Проверяем, нет ли уже активного таймера для этого устройства
+            # проверяем нет ли уже активного таймера для этого устройства
             for timer in self.active_timers:
                 if timer['device'] == rule['device']:
-                    # Обновляем существующий таймер
+                    # обновляем существующий таймер
                     timer['end_time'] = datetime.now() + timedelta(minutes=rule['timer'])
                     timer['action'] = rule['action']
                     timer['duration'] = rule['timer']
@@ -801,7 +721,7 @@ class SmartHomeController:
                     self.root.after(0, self.update_timers_display)
                     return
 
-            # Создаём новый таймер
+            # создаём новый таймер
             timer = {
                 'device': rule['device'],
                 'action': rule['action'],
@@ -865,7 +785,7 @@ class SmartHomeController:
                         minutes = total_seconds // 60
                         seconds = total_seconds % 60
 
-                        # Создаём визуальный индикатор прогресса
+                        # создаём визуальный индикатор прогресса
                         total_duration = timer['duration'] * 60
                         progress = min(100, max(0, int((total_duration - total_seconds) / total_duration * 100)))
 
@@ -902,10 +822,10 @@ class SmartHomeController:
 
             self.time_of_day = self.get_time_of_day()
 
-            # Проверяем правила
+            # проверяем правила
             self.check_rules()
 
-            # Обновляем отображение
+            # обновляем отображение
             self.root.after(0, self.update_sensor_display)
 
             time.sleep(3)
